@@ -7,14 +7,11 @@ const routes = [
     path: '/',
     name: 'home',
     component: HomeView
-<<<<<<< HEAD
-=======
   },
   {
     path: '/results',
     name: 'results',
     component: SearchResultsView
->>>>>>> LukasBranch
   }
 ]
 
