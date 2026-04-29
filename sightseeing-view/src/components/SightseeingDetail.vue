@@ -21,16 +21,23 @@
 <script>
 export default {
   name: 'SightseeingDetail',
+  // 1. Prop-Validierung (Sicherheit wie in C#)
   props: {
-    place: Object // Validierung: Wir erwarten ein Objekt 
+    place: {
+      type: Object,
+      required: true
+    }
+  },
+  // 2. Computed Properties für Logik-Veredelung
+  computed: {
+    formattedCoords() {
+      if (!this.place.coords) return 'Keine Koordinaten';
+      return `${this.place.coords.lat.toFixed(4)}, ${this.place.coords.lon.toFixed(4)}`;
+    }
   },
   methods: {
     goBack() {
-      // Wir feuern ein Event nach oben (wie ein C# Event)
-      this.$emit('close-detail'); 
-
-
-
+      this.$emit('close-detail'); // Signal an die App.vue [cite: 22]
     }
   }
 }
