@@ -74,6 +74,7 @@ export function mapGeoapifyPlace(feature) {
     .join(', ')
 
   return {
+    id: properties.place_id || properties.datasource?.raw?.osm_id || null,
     name: properties.name || properties.address_line1 || 'Unbenannter Ort',
     category: (properties.categories && properties.categories[0]) || 'tourism',
     address: address || 'Adresse unbekannt',

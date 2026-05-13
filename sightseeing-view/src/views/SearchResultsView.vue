@@ -19,6 +19,7 @@
     </header>
 
     <section class="results-content">
+      
       <p v-if="!hasSearched" class="empty">
         Noch keine Suche gestartet. Gib oben eine Stadt ein.
       </p>
@@ -44,7 +45,12 @@
         </div>
 
         <div v-if="results.length" class="result-grid">
-          <article v-for="place in results" :key="place.name" class="result-card">
+          <article
+            v-for="place in results"
+            :key="buildPlaceKey(place)"
+            class="result-card"
+            @click="openDetail(place)"
+          >
             <div>
               <p class="result-tag">{{ place.category }}</p>
               <h3>{{ place.name }}</h3>
@@ -53,6 +59,7 @@
             <p class="result-meta">
               {{ place.website || 'Details folgen in der Detailansicht.' }}
             </p>
+            <p class="result-cta">Details ansehen</p>
           </article>
         </div>
       </div>
@@ -140,7 +147,7 @@ export default {
         })
 
         const features = payload.features || []
-        this.results = features.map((feature) => mapGeoapifyPlace(feature))
+        this.results = this.deduplicatePlaces(features.map((feature) => mapGeoapifyPlace(feature)))
         this.hasNextPage = features.length === this.limit
       } catch (err) {
         this.error = err.message || 'Etwas ist schiefgelaufen.'
@@ -160,6 +167,48 @@ export default {
       if (this.lastCity) {
         this.fetchResults(this.lastCity)
       }
+    },
+    deduplicatePlaces(places) {
+      const seen = new Set()
+      const unique = []
+
+      places.forEach((place) => {
+        const key = this.buildPlaceKey(place)
+        if (!seen.has(key)) {
+          seen.add(key)
+          unique.push(place)
+        }
+      })
+
+      return unique
+    },
+    buildPlaceKey(place) {
+      if (place.id) {
+        return String(place.id)
+      }
+
+      const lat = place.coords?.lat ?? 'na'
+      const lon = place.coords?.lon ?? 'na'
+      return `${place.name}|${place.address}|${lat}|${lon}`
+    },
+    openDetail(place) {
+      this.$router.push({
+        name: 'detail',
+        params: {
+          id: this.buildPlaceKey(place)
+        },
+        query: {
+          name: place.name,
+          category: place.category,
+          address: place.address,
+          website: place.website || '',
+          opening: place.opening_hours || '',
+          image: place.image || '',
+          lat: place.coords?.lat ?? '',
+          lon: place.coords?.lon ?? '',
+          city: this.cityLabel || this.lastCity || ''
+        }
+      })
     }
   }
 }
@@ -241,8 +290,9 @@ export default {
 
 .result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
+  align-items: stretch;
 }
 
 .result-card {
@@ -251,8 +301,17 @@ export default {
   padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  justify-content: space-between;
+  min-height: 210px;
+  gap: 18px;
   box-shadow: 0 20px 40px rgba(31, 41, 51, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.result-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 24px 48px rgba(31, 41, 51, 0.16);
 }
 
 .result-tag {
@@ -272,6 +331,12 @@ export default {
   margin: 0;
   font-size: 0.85rem;
   color: #7b8794;
+}
+
+.result-cta {
+  margin: 0;
+  color: #e07a5f;
+  font-weight: 600;
 }
 
 .status {
