@@ -7,7 +7,7 @@
           {{ cityLabel ? `Sehenswuerdigkeiten in ${cityLabel}` : 'Finde deine Stadt' }}
         </h1>
         <p class="hero-subtitle">
-          Hier landen die Ergebnisse nach deiner Suche. Pro Seite werden 10 Spots geladen.
+          Hier landen die Ergebnisse nach der Suche. Pro Seite werden 10 Spots geladen.
         </p>
       </div>
       <CitySearch
