@@ -10,7 +10,7 @@
         autocomplete="off"
       />
       <button type="submit" :disabled="!internalValue.trim()">
-        {{ buttonText }}
+        {{ buttonText}}
       </button>
     </div>
     <p v-if="helper" class="city-search__helper">{{ helper }}</p>

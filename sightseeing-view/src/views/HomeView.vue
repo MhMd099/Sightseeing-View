@@ -17,6 +17,7 @@
 </template>
 
 <script>
+
 import CitySearch from '@/components/CitySearch.vue'
 
 export default {
