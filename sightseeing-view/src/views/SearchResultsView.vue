@@ -18,6 +18,8 @@
         @submit="handleSearch"
       />
     </header>
+      />
+    </header>
 
     <section class="results-content">
       <p v-if="!hasSearched" class="empty">
@@ -68,6 +70,7 @@ import { fetchWikipediaCaves } from '@/services/wikipedia'
 export default {
   name: 'SearchResultsView',
   components: {
+    CitySearch
     CitySearch
   },
   data() {
@@ -144,9 +147,14 @@ export default {
         this.caves = []
       } finally {
         this.isLoading = false
+        this.isLoading = false
       }
     },
     changePage(direction) {
+      const nextPage = this.page + direction
+      if (nextPage < 1 || (direction > 0 && !this.hasNextPage)) {
+        return
+      }
       const nextPage = this.page + direction
       if (nextPage < 1 || (direction > 0 && !this.hasNextPage)) {
         return
@@ -162,6 +170,58 @@ export default {
 </script>
 
 <style scoped>
+.results-page {
+  padding: 48px 7vw 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.results-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  align-items: center;
+}
+
+.hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.75rem;
+  color: #2a9d8f;
+  margin: 0;
+}
+
+.results-hero h1 {
+  font-size: clamp(2rem, 2vw + 1.5rem, 2.8rem);
+  margin: 10px 0 12px;
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: #5f6c7b;
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.results-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.results-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.pagination {
 .results-page {
   padding: 48px 7vw 64px;
   display: flex;
