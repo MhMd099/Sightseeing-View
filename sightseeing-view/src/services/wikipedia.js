@@ -1,4 +1,4 @@
-const ATTRACTIONS_CACHE = new Map()
+const CAVE_CACHE = new Map()
 
 function buildWikiUrl(base, params) {
   const url = new URL(base)
@@ -11,11 +11,11 @@ function buildWikiUrl(base, params) {
 }
 
 function normalizeTitle(title) {
-  return title.replace(/_/g, ' ').trim()
+  return String(title || '').replace(/_/g, ' ').trim()
 }
 
 function normalizeText(value) {
-  return value
+  return String(value || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -23,259 +23,277 @@ function normalizeText(value) {
     .trim()
 }
 
-async function searchWikipediaTitle(query, lang) {
-  const url = buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+async function fetchJson(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    return null
+  }
+
+  return response.json()
+}
+
+async function searchWikipediaTitles(query, lang, limit = 10, namespace) {
+  const params = {
     action: 'query',
     list: 'search',
     srsearch: query,
-    srlimit: 1,
+    srlimit: limit,
     format: 'json',
     origin: '*'
-  })
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    return null
   }
 
-  const payload = await response.json()
-  const hit = payload.query && payload.query.search && payload.query.search[0]
-  return hit ? normalizeTitle(hit.title) : null
+  if (namespace !== undefined) {
+    params.srnamespace = namespace
+  }
+
+  const payload = await fetchJson(buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, params))
+  const hits = Array.isArray(payload?.query?.search) ? payload.query.search : []
+  return hits.map((hit) => normalizeTitle(hit.title)).filter(Boolean)
 }
 
-async function fetchSections(lang, title) {
-  const url = buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
-    action: 'parse',
-    prop: 'sections',
-    page: title,
-    format: 'json',
-    origin: '*'
-  })
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    return []
-  }
-
-  const payload = await response.json()
-  return (payload.parse && payload.parse.sections) || []
-}
-
-async function fetchSectionHtml(lang, title, sectionIndex) {
-  const url = buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
-    action: 'parse',
-    prop: 'text',
-    page: title,
-    section: sectionIndex,
-    format: 'json',
-    origin: '*'
-  })
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    return ''
-  }
-
-  const payload = await response.json()
-  return (payload.parse && payload.parse.text && payload.parse.text['*']) || ''
-}
-
-function extractListItemsFromHtml(html) {
-  if (!html) {
-    return []
-  }
-
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
-  const items = Array.from(doc.querySelectorAll('li'))
-  return items
-    .map((item) => {
-      const link = item.querySelector('a')
-      const text = link ? link.textContent : item.textContent
-      return text ? text.replace(/\s+/g, ' ').trim() : ''
+async function getEnglishTitleFromDe(deTitle) {
+  const payload = await fetchJson(
+    buildWikiUrl('https://de.wikipedia.org/w/api.php', {
+      action: 'query',
+      prop: 'langlinks',
+      lllang: 'en',
+      titles: deTitle,
+      format: 'json',
+      origin: '*'
     })
-    .filter(Boolean)
-}
+  )
 
-async function extractAttractionsFromPage(lang, title) {
-  const sectionKeywords = {
-    de: ['sehenswurdigkeiten', 'sehenswuerdigkeiten', 'sehenswertes', 'attraktionen', 'kultur', 'tourismus'],
-    en: ['attractions', 'sights', 'landmarks', 'tourist attractions', 'points of interest']
-  }
-
-  const sections = await fetchSections(lang, title)
-  const keywords = sectionKeywords[lang] || []
-  const matches = sections.filter((section) => {
-    const normalized = normalizeText(section.line || '')
-    return keywords.some((keyword) => normalized.includes(keyword))
-  })
-
-  if (matches.length) {
-    const combined = []
-    for (const match of matches) {
-      const html = await fetchSectionHtml(lang, title, match.index)
-      combined.push(...extractListItemsFromHtml(html))
-    }
-    return combined
-  }
-
-  const fallbackHtml = await fetchSectionHtml(lang, title, 0)
-  return extractListItemsFromHtml(fallbackHtml)
-}
-
-async function fetchAttractionsForLang(city, lang) {
-  const candidates = lang === 'de'
-    ? [
-        `${city} Sehenswuerdigkeiten`,
-        `Sehenswuerdigkeiten in ${city}`,
-        `${city}`
-      ]
-    : [
-        `Tourist attractions in ${city}`,
-        `List of tourist attractions in ${city}`,
-        `Sights in ${city}`,
-        `${city}`
-      ]
-
-  const combined = []
-  for (const query of candidates) {
-    const title = await searchWikipediaTitle(query, lang)
-    if (!title) {
-      continue
-    }
-
-    const items = await extractAttractionsFromPage(lang, title)
-    if (items.length) {
-      combined.push(...items)
-    }
-  }
-
-  return combined
-}
-
-export async function fetchWikipediaAttractions(city, limit = 60) {
-  const cacheKey = normalizeText(city)
-  if (ATTRACTIONS_CACHE.has(cacheKey)) {
-    return ATTRACTIONS_CACHE.get(cacheKey).slice(0, limit)
-  }
-
-  const deItems = await fetchAttractionsForLang(city, 'de')
-
-  const seen = new Set()
-  const merged = []
-
-  const addItems = (items) => {
-    items.forEach((item) => {
-      const normalized = normalizeText(item)
-      if (!normalized || seen.has(normalized)) {
-        return
-      }
-      seen.add(normalized)
-      merged.push(item)
-    })
-  }
-
-  addItems(deItems)
-
-  ATTRACTIONS_CACHE.set(cacheKey, merged)
-  return merged.slice(0, limit)
-}
-
-async function getGermanTitleFromEn(enTitle) {
-  const url = buildWikiUrl('https://en.wikipedia.org/w/api.php', {
-    action: 'query',
-    prop: 'langlinks',
-    lllang: 'de',
-    titles: enTitle,
-    format: 'json',
-    origin: '*'
-  })
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    return null
-  }
-
-  const payload = await response.json()
-  const pages = payload.query && payload.query.pages
+  const pages = payload?.query?.pages
   if (!pages) {
     return null
   }
 
   const page = Object.values(pages)[0]
-  const link = page && page.langlinks && page.langlinks[0]
+  const link = page?.langlinks?.[0]
   return link ? normalizeTitle(link['*']) : null
 }
 
-function formatPageviewsDate(date) {
-  const yyyy = date.getUTCFullYear()
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const dd = String(date.getUTCDate()).padStart(2, '0')
-  return `${yyyy}${mm}${dd}`
-}
-
-async function getPageviews(lang, title) {
-  const end = new Date()
-  const start = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)
-  const url = buildWikiUrl(
-    `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/${lang}.wikipedia.org/all-access/user/${encodeURIComponent(title)}/daily/${formatPageviewsDate(start)}/${formatPageviewsDate(end)}`,
-    {}
-  )
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    return 0
+async function resolveCountryTitle(country) {
+  const query = String(country || '').trim()
+  if (!query) {
+    return null
   }
 
-  const payload = await response.json()
-  const items = payload.items || []
-  return items.reduce((sum, item) => sum + (item.views || 0), 0)
+  const enHits = await searchWikipediaTitles(query, 'en', 10, 0)
+  if (enHits.length) {
+    return enHits[0]
+  }
+
+  const deHits = await searchWikipediaTitles(query, 'de', 10, 0)
+  for (const deHit of deHits) {
+    const enTitle = await getEnglishTitleFromDe(deHit)
+    if (enTitle) {
+      return enTitle
+    }
+  }
+
+  return null
 }
 
-export async function enrichPlacesWithWikipedia(places, cityLabel) {
-  const cache = new Map()
-  const enriched = []
-  const queries = places.map((place) => {
-    const key = `${place.name}|${cityLabel}`
-    if (cache.has(key)) {
-      return cache.get(key)
+async function getExistingTitle(lang, title) {
+  const payload = await fetchJson(
+    buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+      action: 'query',
+      titles: title,
+      format: 'json',
+      origin: '*'
+    })
+  )
+
+  const pages = payload?.query?.pages
+  if (!pages) {
+    return null
+  }
+
+  const page = Object.values(pages)[0]
+  if (!page || page.missing) {
+    return null
+  }
+
+  return normalizeTitle(page.title)
+}
+
+async function resolveCategoryTitle(countryTitle) {
+  const normalizedCountry = String(countryTitle || '').trim()
+  if (!normalizedCountry) {
+    return null
+  }
+
+  const candidateSuffixes = [
+    normalizedCountry,
+    normalizedCountry.replace(/\s*\([^)]*\)\s*$/, ''),
+    normalizedCountry.replace(/^the\s+/i, '')
+  ].filter(Boolean)
+
+  const exactCandidates = []
+  for (const suffix of candidateSuffixes) {
+    exactCandidates.push(`Category:Caves of ${suffix}`)
+    exactCandidates.push(`Category:Caves of the ${suffix}`)
+    exactCandidates.push(`Category:Caves in ${suffix}`)
+  }
+
+  for (const candidate of exactCandidates) {
+    const existing = await getExistingTitle('en', candidate)
+    if (existing) {
+      return existing
+    }
+  }
+
+  const rootMembers = await listCategorySubcategories('en', 'Category:Caves by country')
+  const normalizedNeedle = normalizeText(normalizedCountry)
+  const rootHit = rootMembers.find((member) => normalizeText(member.title).includes(normalizedNeedle))
+  if (rootHit) {
+    return rootHit.title
+  }
+
+  const searchQueries = [
+    `Category:Caves of ${normalizedCountry}`,
+    `Category:Caves in ${normalizedCountry}`,
+    `Category:Caves ${normalizedCountry}`
+  ]
+
+  for (const query of searchQueries) {
+    const hits = await searchWikipediaTitles(query, 'en', 10, 14)
+    const exactHit = hits.find((title) => /^Category:/i.test(title))
+    if (exactHit) {
+      return exactHit
+    }
+  }
+
+  return null
+}
+
+async function fetchCategoryMembers(lang, categoryTitle, seenCategories, depth = 0, includeOnlySubcategories = false) {
+  const categoryKey = normalizeText(categoryTitle)
+  if (!categoryKey || seenCategories.has(categoryKey) || depth > 4) {
+    return []
+  }
+
+  seenCategories.add(categoryKey)
+
+  const collected = []
+  let cmcontinue = null
+
+  do {
+    const payload = await fetchJson(
+      buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+        action: 'query',
+        list: 'categorymembers',
+        cmtitle: categoryTitle,
+        cmtype: includeOnlySubcategories ? 'subcat' : 'page|subcat',
+        cmlimit: 'max',
+        format: 'json',
+        origin: '*',
+        ...(cmcontinue ? { cmcontinue } : {})
+      })
+    )
+
+    const members = Array.isArray(payload?.query?.categorymembers) ? payload.query.categorymembers : []
+
+    for (const member of members) {
+      if (member.ns === 14) {
+        const nested = await fetchCategoryMembers(lang, member.title, seenCategories, depth + 1)
+        collected.push(...nested)
+        continue
+      }
+
+      if (member.ns === 0) {
+        collected.push({
+          name: normalizeTitle(member.title),
+          sourceCategory: categoryTitle,
+          sourceLang: lang
+        })
+      }
     }
 
-    const task = (async () => {
-      let deTitle = await searchWikipediaTitle(`${place.name} ${cityLabel}`, 'de')
-      let enTitle = null
+    cmcontinue = payload?.continue?.cmcontinue || null
+  } while (cmcontinue)
 
-      if (!deTitle) {
-        enTitle = await searchWikipediaTitle(`${place.name} ${cityLabel}`, 'en')
-        if (enTitle) {
-          deTitle = await getGermanTitleFromEn(enTitle)
-        }
+  return collected
+}
+
+async function listCategorySubcategories(lang, categoryTitle) {
+  const subcategories = []
+  let cmcontinue = null
+
+  do {
+    const payload = await fetchJson(
+      buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+        action: 'query',
+        list: 'categorymembers',
+        cmtitle: categoryTitle,
+        cmtype: 'subcat',
+        cmlimit: 'max',
+        format: 'json',
+        origin: '*',
+        ...(cmcontinue ? { cmcontinue } : {})
+      })
+    )
+
+    const members = Array.isArray(payload?.query?.categorymembers) ? payload.query.categorymembers : []
+    members.forEach((member) => {
+      if (member.ns === 14) {
+        subcategories.push({
+          title: normalizeTitle(member.title)
+        })
       }
-
-      const titleForViews = deTitle || enTitle
-      const langForViews = deTitle ? 'de' : 'en'
-      const pageviews = titleForViews ? await getPageviews(langForViews, titleForViews) : 0
-
-      return {
-        place,
-        deTitle,
-        enTitle,
-        pageviews
-      }
-    })()
-
-    cache.set(key, task)
-    return task
-  })
-
-  const results = await Promise.all(queries)
-  results.forEach(({ place, deTitle, pageviews }) => {
-    enriched.push({
-      ...place,
-      nameGerman: place.nameGerman || deTitle || null,
-      wikiScore: pageviews
     })
-  })
 
-  return enriched
+    cmcontinue = payload?.continue?.cmcontinue || null
+  } while (cmcontinue)
+
+  return subcategories
+}
+
+export async function fetchWikipediaCaves(country) {
+  const cacheKey = normalizeText(country)
+  if (CAVE_CACHE.has(cacheKey)) {
+    return CAVE_CACHE.get(cacheKey).slice()
+  }
+
+  const countryTitle = await resolveCountryTitle(country)
+  const categories = []
+
+  if (countryTitle) {
+    const categoryTitle = await resolveCategoryTitle(countryTitle)
+    if (categoryTitle) {
+      categories.push({ lang: 'en', title: categoryTitle })
+    }
+  }
+
+  if (!categories.length) {
+    const rootMembers = await listCategorySubcategories('en', 'Category:Caves by country')
+    const normalizedNeedle = normalizeText(country)
+    const rootHit = rootMembers.find((member) => normalizeText(member.title).includes(normalizedNeedle))
+    if (rootHit) {
+      categories.push({ lang: 'en', title: rootHit.title })
+    }
+  }
+
+  const collected = []
+  for (const category of categories) {
+    const members = await fetchCategoryMembers(category.lang, category.title, new Set())
+    collected.push(...members)
+  }
+
+  const seen = new Set()
+  const unique = []
+
+  for (const cave of collected) {
+    const key = normalizeText(cave.name)
+    if (!key || seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    unique.push(cave)
+  }
+
+  CAVE_CACHE.set(cacheKey, unique)
+  return unique.slice()
 }

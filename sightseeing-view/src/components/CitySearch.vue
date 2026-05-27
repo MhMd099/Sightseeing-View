@@ -27,7 +27,7 @@ export default {
     },
     placeholder: {
       type: String,
-      default: 'z.B. Wien, Graz, Salzburg'
+      default: 'z.B. Österreich, Venezuela, Kanada'
     },
     buttonText: {
       type: String,

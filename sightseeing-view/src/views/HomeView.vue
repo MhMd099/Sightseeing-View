@@ -1,14 +1,15 @@
 <template>
   <main class="home">
     <section class="hero">
-      <p class="hero-kicker">Stadt entdecken</p>
-      <h1>Sehenswuerdigkeiten finden, ohne Umwege.</h1>
+      <p class="hero-kicker">Hoehlen weltweit</p>
+      <h1>Hoehlen nach Land anzeigen.</h1>
       <p class="hero-subtitle">
-        Gib eine Stadt ein und wir zeigen dir die wichtigsten Highlights.
+        Gib ein Land ein und wir lesen die Wikipedia-Kategorie mit Hoehlen aus.
       </p>
       <CitySearch
-        v-model="cityQuery"
-        helper="Nach dem Suchen landest du in der Listenansicht."
+        v-model="countryQuery"
+        placeholder="z.B. Österreich, Venezuela, Kanada"
+        helper="Nach dem Suchen landest du direkt in der Hoehlenliste."
         @submit="startSearch"
       />
     </section>
@@ -25,12 +26,12 @@ export default {
   },
   data() {
     return {
-      cityQuery: ''
+      countryQuery: ''
     }
   },
   methods: {
-    startSearch(city) {
-      this.$router.push({ name: 'results', query: { city } })
+    startSearch(country) {
+      this.$router.push({ name: 'results', query: { country } })
     }
   }
 }

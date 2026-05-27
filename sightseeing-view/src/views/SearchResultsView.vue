@@ -2,36 +2,37 @@
   <main class="results-page">
     <header class="results-hero">
       <div>
-        <p class="hero-kicker">Listenansicht</p>
+        <p class="hero-kicker">Wikipedia-Kategorie</p>
         <h1>
-          {{ cityLabel ? `Sehenswuerdigkeiten in ${cityLabel}` : 'Finde deine Stadt' }}
+          {{ countryLabel ? `Hoehlen in ${countryLabel}` : 'Hoehlen weltweit' }}
         </h1>
         <p class="hero-subtitle">
-          Hier landen die Ergebnisse nach deiner Suche. Pro Seite werden 24 Spots geladen.
+          Wir lesen die Wikipedia-Kategorie aus und zeigen alle gefundenen Hoehlen.
         </p>
       </div>
       <CitySearch
-        v-model="cityQuery"
+        v-model="countryQuery"
+        placeholder="z.B. Österreich, Venezuela, Kanada"
         button-text="Suche"
-        helper="Enter druecken, um die Liste zu laden."
+        helper="Land eingeben und Enter druecken."
         @submit="handleSearch"
       />
     </header>
 
     <section class="results-content">
       <p v-if="!hasSearched" class="empty">
-        Noch keine Suche gestartet. Gib oben eine Stadt ein.
+        Noch keine Suche gestartet. Gib oben ein Land ein.
       </p>
 
       <div v-else>
-        <p v-if="isLoading" class="status">Lade Ergebnisse...</p>
+        <p v-if="isLoading" class="status">Lade Hoehlen aus Wikipedia...</p>
         <p v-else-if="error" class="error">{{ error }}</p>
-        <p v-else-if="results.length === 0" class="empty">
-          Keine Ergebnisse gefunden. Probiere eine andere Stadt.
+        <p v-else-if="caves.length === 0" class="empty">
+          Keine Hoehlen gefunden. Probiere ein anderes Land.
         </p>
 
-        <div v-if="results.length" class="results-header">
-          <h2>Sehenswuerdigkeiten</h2>
+        <div v-if="caves.length" class="results-header">
+          <h2>{{ caves.length }} Hoehlen gefunden</h2>
           <div class="pagination">
             <button type="button" @click="changePage(-1)" :disabled="page === 1 || isLoading">
               Zurueck
@@ -43,22 +44,16 @@
           </div>
         </div>
 
-        <div v-if="results.length" class="result-grid">
-          <article
-            v-for="place in results"
-            :key="buildPlaceKey(place)"
-            class="result-card"
-            @click="openDetail(place)"
-          >
+        <div v-if="caves.length" class="result-grid">
+          <article v-for="cave in pagedCaves" :key="caveKey(cave)" class="result-card">
             <div>
-              <p class="result-tag">{{ place.categoryLabel }}</p>
-              <h3>{{ displayName(place) }}</h3>
-              <p class="result-address">{{ place.address }}</p>
+              <p class="result-tag">Wikipedia</p>
+              <h3>{{ cave.name }}</h3>
+              <p class="result-address">{{ cave.sourceCategory }}</p>
             </div>
             <p class="result-meta">
-              {{ place.website || 'Details folgen in der Detailansicht.' }}
+              {{ cave.sourceLang === 'de' ? 'Quelle: Deutsche Wikipedia' : 'Quelle: Englische Wikipedia' }}
             </p>
-            <p class="result-cta">Details ansehen</p>
           </article>
         </div>
       </div>
@@ -68,8 +63,7 @@
 
 <script>
 import CitySearch from '@/components/CitySearch.vue'
-import { fetchSightseeing, geocodeCity, mapGeoapifyPlace } from '@/services/geoapify'
-import { fetchWikipediaAttractions } from '@/services/wikipedia'
+import { fetchWikipediaCaves } from '@/services/wikipedia'
 
 export default {
   name: 'SearchResultsView',
@@ -78,99 +72,76 @@ export default {
   },
   data() {
     return {
-      cityQuery: '',
-      cityLabel: '',
-      lastCity: '',
-      lastLocation: null,
-      results: [],
+      countryQuery: '',
+      countryLabel: '',
+      caves: [],
       page: 1,
-      limit: 24,
-      hasNextPage: false,
+      limit: 8,
       isLoading: false,
       error: '',
       hasSearched: false,
-      wikiNames: []
+      lastCountry: ''
+    }
+  },
+  computed: {
+    pagedCaves() {
+      const start = (this.page - 1) * this.limit
+      return this.caves.slice(start, start + this.limit)
+    },
+    hasNextPage() {
+      return this.page * this.limit < this.caves.length
     }
   },
   watch: {
-    '$route.query.city': {
+    '$route.query.country': {
       immediate: true,
-      handler(newCity) {
-        if (!newCity) {
+      handler(newCountry) {
+        if (!newCountry) {
           this.hasSearched = false
-          this.results = []
+          this.caves = []
           this.error = ''
+          this.countryLabel = ''
+          this.page = 1
           return
         }
 
-        const normalizedCity = String(newCity)
-        this.cityQuery = normalizedCity
-        this.handleSearch(normalizedCity)
+        const normalizedCountry = String(newCountry)
+        this.countryQuery = normalizedCountry
+        this.fetchCaves(normalizedCountry)
       }
     }
   },
   methods: {
-    handleSearch(city) {
-      const trimmed = city.trim()
+    handleSearch(country) {
+      const trimmed = country.trim()
       if (!trimmed) {
         return
       }
 
-      if (trimmed !== this.lastCity) {
-        this.page = 1
-        this.lastLocation = null
-        this.wikiNames = []
+      if (this.$route.query.country !== trimmed) {
+        this.$router.push({ name: 'results', query: { country: trimmed } })
+        return
       }
 
-      if (this.$route.query.city !== trimmed) {
-        this.$router.push({ name: 'results', query: { city: trimmed } })
-      }
-
-      this.fetchResults(trimmed)
+      this.fetchCaves(trimmed)
     },
-    async fetchResults(city) {
+    async fetchCaves(country) {
       this.isLoading = true
       this.error = ''
       this.hasSearched = true
 
       try {
-        if (!this.lastLocation || this.lastCity !== city) {
-          this.lastLocation = await geocodeCity(city)
-          this.cityLabel = this.lastLocation.cityName || this.lastLocation.label
-          this.lastCity = city
+        const trimmed = country.trim()
+        if (trimmed !== this.lastCountry) {
+          this.page = 1
         }
 
-        const requestLimit = Math.max(this.limit * 4, 200)
-        const payload = await fetchSightseeing({
-          lat: this.lastLocation.lat,
-          lon: this.lastLocation.lon,
-          limit: requestLimit,
-          offset: (this.page - 1) * requestLimit
-        })
-
-        const features = payload.features || []
-        const mapped = features.map((feature) => mapGeoapifyPlace(feature))
-        const filtered = this.dedupePlaces(this.filterPlaces(mapped))
-
-        if (!this.wikiNames.length) {
-          const wikiCity = this.lastLocation.cityName || city
-          this.wikiNames = await fetchWikipediaAttractions(wikiCity, 80)
-        }
-
-        if (!this.wikiNames.length) {
-          this.results = []
-          this.hasNextPage = false
-          return
-        }
-
-        const ordered = this.matchPlacesToWiki(this.wikiNames, filtered)
-        const start = (this.page - 1) * this.limit
-        this.results = ordered.slice(start, start + this.limit)
-        this.hasNextPage = ordered.length > start + this.limit
+        this.countryLabel = trimmed
+        this.lastCountry = trimmed
+        this.caves = await fetchWikipediaCaves(trimmed)
       } catch (err) {
         this.error = err.message || 'Etwas ist schiefgelaufen.'
-        this.results = []
-        this.hasNextPage = false
+        this.caves = []
       } finally {
         this.isLoading = false
       }
@@ -182,180 +153,9 @@ export default {
       }
 
       this.page = nextPage
-      if (this.lastCity) {
-        this.fetchResults(this.lastCity)
-      }
     },
-    filterPlaces(places) {
-      const allowlist = new Set([
-        'tourism.sights',
-        'tourism.attraction',
-        'tourism.museum',
-        'tourism.gallery',
-        'tourism.monument',
-        'tourism.artwork',
-        'tourism.viewpoint',
-        'tourism.theme_park',
-        'tourism.zoo',
-        'tourism.castle',
-        'tourism.palace',
-        'tourism.heritage'
-      ])
-
-      const streetNamePattern = /(strasse|straße|gasse|platz|weg|allee|ring|ufer|promenade|boulevard|road|street|avenue|lane|drive)\s*\d+/i
-
-      return places.filter((place) => {
-        const name = (place.name || '').toLowerCase().trim()
-        if (!name || name === 'unbenannter ort') {
-          return false
-        }
-
-        if (/°/.test(name) || /\d+[.,]\d+/.test(name)) {
-          return false
-        }
-
-        if (streetNamePattern.test(name)) {
-          return false
-        }
-
-        const addressLine1 = (place.addressLine1 || '').toLowerCase()
-        if (addressLine1 && addressLine1 === name && /\d/.test(addressLine1)) {
-          return false
-        }
-
-        const categories = place.categories || []
-        const allowed = categories.some((category) => allowlist.has(category))
-        if (!allowed) {
-          return false
-        }
-
-        const blocked = categories.some((category) => {
-          return (
-            category.startsWith('highway') ||
-            category.startsWith('building') ||
-            category.startsWith('amenity.school') ||
-            category.startsWith('amenity.college') ||
-            category.startsWith('amenity.university') ||
-            category.includes('address') ||
-            category.includes('road')
-          )
-        })
-
-        return !blocked
-      })
-    },
-    dedupePlaces(places) {
-      const seen = new Set()
-      return places.filter((place) => {
-        const key = this.buildPlaceKey(place)
-        if (seen.has(key)) {
-          return false
-        }
-        seen.add(key)
-        return true
-      })
-    },
-    buildPlaceKey(place) {
-      const lat = place.coords?.lat
-      const lon = place.coords?.lon
-      const roundedLat = typeof lat === 'number' ? lat.toFixed(3) : 'na'
-      const roundedLon = typeof lon === 'number' ? lon.toFixed(3) : 'na'
-      const nameKey = (place.name || '').toLowerCase().trim()
-      const addressKey = (place.addressLine1 || place.address || '').toLowerCase().trim()
-      return `${nameKey}|${addressKey}|${roundedLat}|${roundedLon}`
-    },
-    matchPlacesToWiki(wikiNames, places) {
-      const normalize = (value) => {
-        return value
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/ß/g, 'ss')
-          .replace(/[^a-z0-9 ]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-      }
-
-      const remaining = places.map((place) => ({
-        place,
-        name: normalize(place.name || ''),
-        alt: normalize(place.nameGerman || '')
-      }))
-      const used = new Set()
-      const results = []
-
-      wikiNames.forEach((wikiName) => {
-        const target = normalize(wikiName)
-        if (!target) {
-          return
-        }
-
-        let best = null
-        let bestScore = 0
-        remaining.forEach((entry) => {
-          const key = this.buildPlaceKey(entry.place)
-          if (used.has(key)) {
-            return
-          }
-
-          const candidates = [entry.name, entry.alt].filter(Boolean)
-          let score = 0
-          candidates.forEach((candidate) => {
-            if (candidate === target) {
-              score = Math.max(score, 3)
-            } else if (candidate.startsWith(target) || target.startsWith(candidate)) {
-              score = Math.max(score, 2)
-            } else if (candidate.includes(target) || target.includes(candidate)) {
-              score = Math.max(score, 1)
-            }
-          })
-
-          if (score > bestScore) {
-            bestScore = score
-            best = entry.place
-          }
-        })
-
-        if (best && bestScore > 0) {
-          const key = this.buildPlaceKey(best)
-          used.add(key)
-          results.push(best)
-        }
-      })
-
-      return results
-    },
-    displayName(place) {
-      const original = place.name || ''
-      const german = place.nameGerman
-      if (!german) {
-        return original
-      }
-
-      if (german.toLowerCase() === original.toLowerCase()) {
-        return original
-      }
-
-      return `${original} (${german})`
-    },
-    openDetail(place) {
-      this.$router.push({
-        name: 'detail',
-        params: {
-          id: this.buildPlaceKey(place)
-        },
-        query: {
-          name: place.name,
-          category: place.category,
-          address: place.address,
-          website: place.website || '',
-          opening: place.opening_hours || '',
-          image: place.image || '',
-          lat: place.coords?.lat ?? '',
-          lon: place.coords?.lon ?? '',
-          city: this.cityLabel || this.lastCity || ''
-        }
-      })
+    caveKey(cave) {
+      return `${cave.sourceLang}:${cave.name}`
     }
   }
 }
@@ -449,16 +249,9 @@ export default {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 210px;
+  min-height: 200px;
   gap: 18px;
   box-shadow: 0 20px 40px rgba(31, 41, 51, 0.1);
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.result-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 24px 48px rgba(31, 41, 51, 0.16);
 }
 
 .result-tag {
@@ -480,31 +273,13 @@ export default {
   color: #7b8794;
 }
 
-.result-cta {
+.empty,
+.status,
+.error {
   margin: 0;
-  color: #e07a5f;
-  font-weight: 600;
-}
-
-.status {
-  color: #52606d;
 }
 
 .error {
-  color: #b42318;
-  background: #ffe4e8;
-  padding: 12px 14px;
-  border-radius: 12px;
-}
-
-.empty {
-  color: #52606d;
-}
-
-@media (max-width: 640px) {
-  .pagination {
-    width: 100%;
-    justify-content: space-between;
-  }
+  color: #c0392b;
 }
 </style>
