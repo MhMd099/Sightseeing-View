@@ -18,8 +18,7 @@
         @submit="handleSearch"
       />
     </header>
-      />
-    </header>
+
 
     <section class="results-content">
       <p v-if="!hasSearched" class="empty">
@@ -70,7 +69,6 @@ import { fetchWikipediaCaves } from '@/services/wikipedia'
 export default {
   name: 'SearchResultsView',
   components: {
-    CitySearch
     CitySearch
   },
   data() {
@@ -155,10 +153,6 @@ export default {
       if (nextPage < 1 || (direction > 0 && !this.hasNextPage)) {
         return
       }
-      const nextPage = this.page + direction
-      if (nextPage < 1 || (direction > 0 && !this.hasNextPage)) {
-        return
-      }
 
       this.page = nextPage
     },
@@ -221,7 +215,7 @@ export default {
   font-size: 1.4rem;
 }
 
-.pagination {
+
 .results-page {
   padding: 48px 7vw 64px;
   display: flex;
