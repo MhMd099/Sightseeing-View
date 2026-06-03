@@ -46,7 +46,7 @@
         </div>
 
         <div v-if="caves.length" class="result-grid">
-          <article v-for="cave in pagedCaves" :key="caveKey(cave)" class="result-card">
+          <article v-for="cave in pagedCaves" :key="caveKey(cave)" class="result-card" @click="GoToDetail(cave)">
             <div>
               <p class="result-tag">Wikipedia</p>
               <h3>{{ cave.name }}</h3>
@@ -158,7 +158,18 @@ export default {
     },
     caveKey(cave) {
       return `${cave.sourceLang}:${cave.name}`
+    },
+   GoToDetail(cave) {
+  this.$router.push({
+    name: 'details', // Wichtig: Exakt der Name aus deiner index.js (details)
+    query: {
+      name: cave.name,
+      category: cave.sourceCategory,
+      lang: cave.sourceLang,
+      country: this.countryLabel
     }
+  })
+}
   }
 }
 </script>
@@ -265,6 +276,31 @@ export default {
 .results-header h2 {
   margin: 0;
   font-size: 1.4rem;
+}
+.result-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 200px;
+  gap: 18px;
+  box-shadow: 0 20px 40px rgba(31, 41, 51, 0.1);
+  
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.result-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 30px 60px rgba(31, 41, 51, 0.18);
+}
+
+.result-card:active {
+  transform: translateY(-2px) scale(0.99);
+  box-shadow: 0 15px 30px rgba(31, 41, 51, 0.12);
 }
 
 .pagination {
