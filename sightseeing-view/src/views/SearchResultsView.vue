@@ -2,19 +2,14 @@
   <main class="results-page">
     <header class="results-hero">
       <div>
-        <p class="hero-kicker">Wikipedia-Kategorie</p>
         <h1>
           {{ countryLabel ? `Hoehlen in ${countryLabel}` : 'Hoehlen weltweit' }}
         </h1>
-        <p class="hero-subtitle">
-          Wir lesen die Wikipedia-Kategorie aus und zeigen alle gefundenen Hoehlen.
-        </p>
       </div>
       <CitySearch
         v-model="countryQuery"
         placeholder="z.B. Österreich, Venezuela, Kanada"
         button-text="Suche"
-        helper="Land eingeben und Enter druecken."
         @submit="handleSearch"
       />
     </header>
@@ -161,7 +156,7 @@ export default {
     },
    GoToDetail(cave) {
   this.$router.push({
-    name: 'details', // Wichtig: Exakt der Name aus deiner index.js (details)
+    name: 'details',
     query: {
       name: cave.name,
       category: cave.sourceCategory,
@@ -189,22 +184,9 @@ export default {
   align-items: center;
 }
 
-.hero-kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 0.75rem;
-  color: #2a9d8f;
-  margin: 0;
-}
-
 .results-hero h1 {
   font-size: clamp(2rem, 2vw + 1.5rem, 2.8rem);
   margin: 10px 0 12px;
-}
-
-.hero-subtitle {
-  margin: 0;
-  color: #5f6c7b;
 }
 
 .results-content {
@@ -241,22 +223,9 @@ export default {
   align-items: center;
 }
 
-.hero-kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 0.75rem;
-  color: #2a9d8f;
-  margin: 0;
-}
-
 .results-hero h1 {
   font-size: clamp(2rem, 2vw + 1.5rem, 2.8rem);
   margin: 10px 0 12px;
-}
-
-.hero-subtitle {
-  margin: 0;
-  color: #5f6c7b;
 }
 
 .results-content {

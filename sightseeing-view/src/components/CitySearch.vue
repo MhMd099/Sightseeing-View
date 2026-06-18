@@ -1,26 +1,37 @@
 <template>
-  <form class="city-search" @submit.prevent="submit">
-    <label class="sr-only" for="city-input">Stadt</label>
+  <component :is="rootTag" class="city-search" @submit.prevent="submit">
+    <label class="sr-only" :for="inputId">Eingabe</label>
     <div class="city-search__field">
       <input
-        id="city-input"
+        :id="inputId"
         v-model="internalValue"
         type="text"
         :placeholder="placeholder"
-        autocomplete="off"
+        :list="listId"
+        autocomplete="on"
       />
-      <button type="submit" :disabled="!internalValue.trim()">
+      <button v-if="showButton" type="submit" :disabled="!internalValue.trim()">
         {{ buttonText}}
       </button>
     </div>
-    <p v-if="helper" class="city-search__helper">{{ helper }}</p>
-  </form>
+    <datalist v-if="suggestions.length" :id="listId">
+      <option v-for="item in suggestions" :key="item" :value="item" />
+    </datalist>
+  </component>
 </template>
 
 <script>
 export default {
   name: 'CitySearch',
   props: {
+    asForm: {
+      type: Boolean,
+      default: true
+    },
+    inputId: {
+      type: String,
+      default: 'city-input'
+    },
     modelValue: {
       type: String,
       default: ''
@@ -33,13 +44,23 @@ export default {
       type: String,
       default: 'Suchen'
     },
-    helper: {
-      type: String,
-      default: ''
+    showButton: {
+      type: Boolean,
+      default: true
+    },
+    suggestions: {
+      type: Array,
+      default: () => []
     }
   },
   emits: ['update:modelValue', 'submit'],
   computed: {
+    rootTag() {
+      return this.asForm ? 'form' : 'div'
+    },
+    listId() {
+      return `${this.inputId}-suggestions`
+    },
     internalValue: {
       get() {
         return this.modelValue
@@ -100,12 +121,6 @@ export default {
 .city-search button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.city-search__helper {
-  margin: 0;
-  color: #5f6c7b;
-  font-size: 0.95rem;
 }
 
 .sr-only {

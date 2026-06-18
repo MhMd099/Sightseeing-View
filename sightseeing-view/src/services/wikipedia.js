@@ -1,4 +1,5 @@
 const CAVE_CACHE = new Map()
+const ARTICLE_CACHE = new Map()
 
 function buildWikiUrl(base, params) {
   const url = new URL(base)
@@ -30,6 +31,134 @@ async function fetchJson(url) {
   }
 
   return response.json()
+}
+
+function parseCaveMetric(text) {
+  const matches = String(text || '').matchAll(/(\d{1,3}(?:[.\s]\d{3})*(?:[.,]\d+)?)\s*(km|m|cm|mm)\b/gi)
+  let bestValue = null
+  let bestLabel = ''
+
+  for (const match of matches) {
+    const rawValue = String(match[1] || '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+    const numericValue = Number(rawValue)
+    if (!Number.isFinite(numericValue)) {
+      continue
+    }
+
+    const unit = String(match[2] || '').toLowerCase()
+    const valueInMeters = unit === 'km' ? numericValue * 1000 : unit === 'cm' ? numericValue / 100 : unit === 'mm' ? numericValue / 1000 : numericValue
+
+    if (bestValue === null || valueInMeters > bestValue) {
+      bestValue = valueInMeters
+      bestLabel = `${match[1]} ${unit}`
+    }
+  }
+
+  return {
+    value: bestValue,
+    label: bestLabel
+  }
+}
+
+export async function fetchWikipediaArticleIntro(lang, title) {
+  const cacheKey = `${lang}:${normalizeText(title)}`
+  if (ARTICLE_CACHE.has(cacheKey)) {
+    return ARTICLE_CACHE.get(cacheKey)
+  }
+
+  const payload = await fetchJson(
+    buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+      action: 'query',
+      prop: 'extracts',
+      exintro: 1,
+      explaintext: 1,
+      titles: title,
+      format: 'json',
+      origin: '*'
+    })
+  )
+
+  const pages = payload?.query?.pages
+  if (!pages) {
+    return ''
+  }
+
+  const page = Object.values(pages)[0]
+  const extract = String(page?.extract || '').trim()
+  ARTICLE_CACHE.set(cacheKey, extract)
+  return extract
+}
+
+export async function fetchWikipediaPageDetails(lang, title) {
+  const cacheKey = `${lang}:${normalizeText(title)}:details`
+  if (ARTICLE_CACHE.has(cacheKey)) {
+    return ARTICLE_CACHE.get(cacheKey)
+  }
+
+  const payload = await fetchJson(
+    buildWikiUrl(`https://${lang}.wikipedia.org/w/api.php`, {
+      action: 'query',
+      prop: 'extracts|pageimages|description|info',
+      exintro: 1,
+      explaintext: 1,
+      inprop: 'url',
+      pithumbsize: 1400,
+      titles: title,
+      format: 'json',
+      origin: '*'
+    })
+  )
+
+  const pages = payload?.query?.pages
+  if (!pages) {
+    const fallback = {
+      title: normalizeTitle(title),
+      extract: '',
+      description: '',
+      image: '',
+      pageUrl: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`
+    }
+
+    ARTICLE_CACHE.set(cacheKey, fallback)
+    return fallback
+  }
+
+  const page = Object.values(pages)[0] || {}
+  const details = {
+    title: normalizeTitle(page.title || title),
+    extract: String(page.extract || '').trim(),
+    description: String(page.description || '').trim(),
+    image: page.thumbnail?.source || page.originalimage?.source || '',
+    pageUrl: page.fullurl || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`
+  }
+
+  ARTICLE_CACHE.set(cacheKey, details)
+  return details
+}
+
+async function getBestCaveCandidate(caves) {
+  const candidates = Array.isArray(caves) ? caves.slice(0, 12) : []
+  const enriched = await Promise.all(
+    candidates.map(async (cave) => {
+      const extract = await fetchWikipediaArticleIntro(cave.sourceLang, cave.name)
+      const metric = parseCaveMetric(extract)
+
+      return {
+        ...cave,
+        extract,
+        metricValue: metric.value === null ? -1 : metric.value,
+        metricLabel: metric.label
+      }
+    })
+  )
+
+  return enriched.reduce((best, current) => {
+    if (!best) {
+      return current
+    }
+
+    return current.metricValue > best.metricValue ? current : best
+  }, null)
 }
 
 async function searchWikipediaTitles(query, lang, limit = 10, namespace) {
@@ -296,4 +425,23 @@ export async function fetchWikipediaCaves(country) {
 
   CAVE_CACHE.set(cacheKey, unique)
   return unique.slice()
+}
+
+export async function compareCaves(countryA, countryB) {
+  const [cavesA, cavesB] = await Promise.all([
+    fetchWikipediaCaves(countryA),
+    fetchWikipediaCaves(countryB)
+  ])
+
+  const [bestA, bestB] = await Promise.all([
+    getBestCaveCandidate(cavesA),
+    getBestCaveCandidate(cavesB)
+  ])
+
+  return {
+    countryA: String(countryA || '').trim(),
+    countryB: String(countryB || '').trim(),
+    bestA,
+    bestB
+  }
 }
