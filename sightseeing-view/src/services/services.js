@@ -118,6 +118,13 @@ export async function getActivityFeed(limit = 15) {
 	}
 }
 
+export async function clearActivityFeed() {
+	return supabase
+		.from('activity_feed')
+		.delete()
+		.gte('id', 0)
+}
+
 export async function getFavoriteByCaveName(userId, caveName) {
 	const { data, error } = await supabase
 		.from('favorites')

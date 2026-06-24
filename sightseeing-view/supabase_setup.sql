@@ -113,6 +113,7 @@ create policy "User löschen eigene Favoriten"
 
 drop policy if exists "Angemeldete sehen Feed" on public.activity_feed;
 drop policy if exists "User schreiben Feed" on public.activity_feed;
+drop policy if exists "Angemeldete leeren Feed" on public.activity_feed;
 
 create policy "Angemeldete sehen Feed"
   on public.activity_feed
@@ -123,6 +124,11 @@ create policy "User schreiben Feed"
   on public.activity_feed
   for insert
   with check (auth.uid() = user_id);
+
+create policy "Angemeldete leeren Feed"
+  on public.activity_feed
+  for delete
+  using (auth.role() = 'authenticated');
 
 create index if not exists activity_feed_created_at_idx
   on public.activity_feed (created_at desc);

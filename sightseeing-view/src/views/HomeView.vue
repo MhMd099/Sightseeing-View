@@ -8,8 +8,15 @@
         </div>
         <div class="feed-controls">
           <span class="feed-status" :class="{ live: feedLive }">{{ feedLive ? 'Live' : 'Verbinde...' }}</span>
-          <button v-if="feedItems.length > 0" type="button" class="feed-clear-btn" @click="clearFeed" title="Feed leeren">
-            Clear
+          <button
+            v-if="feedItems.length > 0"
+            type="button"
+            class="feed-clear-btn"
+            :disabled="feedClearing"
+            @click="clearFeed"
+            title="Feed leeren"
+          >
+            {{ feedClearing ? 'Clearing...' : 'Clear' }}
           </button>
         </div>
       </div>
@@ -19,7 +26,7 @@
       <p v-else-if="feedItems.length === 0" class="feed-empty">Noch keine Aktivitäten vorhanden.</p>
 
       <div v-else class="feed-list">
-        <article v-for="item in feedItems" :key="item.id" class="feed-item">
+        <article v-for="item in visibleFeedItems" :key="item.id" class="feed-item">
           <div>
             <p class="feed-user">{{ item.user_name || 'Jemand' }}</p>
             <h3>{{ item.cave_name }}</h3>
@@ -27,6 +34,17 @@
           </div>
           <time :datetime="item.created_at">{{ formatFeedTime(item.created_at) }}</time>
         </article>
+
+        <button
+          v-if="feedItems.length > 1"
+          type="button"
+          class="feed-toggle-btn"
+          :aria-expanded="feedExpanded.toString()"
+          @click="feedExpanded = !feedExpanded"
+        >
+          <span class="feed-toggle-arrow" :class="{ open: feedExpanded }">&gt;</span>
+          {{ feedExpanded ? 'Weniger anzeigen' : `${feedItems.length - 1} weitere anzeigen` }}
+        </button>
       </div>
     </section>
 
@@ -123,7 +141,7 @@
 <script>
 import CitySearch from '@/components/CitySearch.vue'
 import { compareCaves } from '@/services/wikipedia'
-import { getActivityFeed, getCurrentUser, supabase } from '@/services/services'
+import { clearActivityFeed, getActivityFeed, getCurrentUser, supabase } from '@/services/services'
 
 export default {
   name: 'HomeView',
@@ -143,9 +161,16 @@ export default {
       userId: '',
       feedItems: [],
       feedLoading: false,
+      feedClearing: false,
       feedError: '',
+      feedExpanded: false,
       feedLive: false,
       feedChannel: null
+    }
+  },
+  computed: {
+    visibleFeedItems() {
+      return this.feedExpanded ? this.feedItems : this.feedItems.slice(0, 1)
     }
   },
   async created() {
@@ -239,6 +264,7 @@ export default {
         }
 
         this.feedItems = feed
+        this.feedExpanded = false
       } catch (error) {
         this.feedError = error?.message || 'Feed konnte nicht geladen werden.'
       } finally {
@@ -264,6 +290,7 @@ export default {
             }
 
             this.feedItems = [item, ...this.feedItems].slice(0, 15)
+            this.feedExpanded = false
           }
         )
         .subscribe((status) => {
@@ -290,8 +317,23 @@ export default {
         timeStyle: 'short'
       })
     },
-    clearFeed() {
-      this.feedItems = []
+    async clearFeed() {
+      this.feedClearing = true
+      this.feedError = ''
+
+      try {
+        const { error } = await clearActivityFeed()
+        if (error) {
+          throw error
+        }
+
+        this.feedItems = []
+        this.feedExpanded = false
+      } catch (error) {
+        this.feedError = error?.message || 'Feed konnte nicht geleert werden.'
+      } finally {
+        this.feedClearing = false
+      }
     }
   }
 }
@@ -482,20 +524,29 @@ export default {
   color: #1f7a6e;
 }
 
-.feed-clear-btn {
+.feed-clear-btn,
+.feed-toggle-btn {
   border: none;
   border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(224, 122, 95, 0.12);
-  color: #b24b35;
   font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.18s ease;
 }
 
+.feed-clear-btn {
+  padding: 6px 12px;
+  background: rgba(224, 122, 95, 0.12);
+  color: #b24b35;
+}
+
 .feed-clear-btn:hover {
   background: rgba(224, 122, 95, 0.2);
+}
+
+.feed-clear-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .feed-empty {
@@ -539,6 +590,29 @@ export default {
 .feed-item time {
   color: var(--ink-700);
   white-space: nowrap;
+}
+
+.feed-toggle-btn {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(42, 157, 143, 0.12);
+  color: #1f7a6e;
+}
+
+.feed-toggle-btn:hover {
+  background: rgba(42, 157, 143, 0.2);
+}
+
+.feed-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+
+.feed-toggle-arrow.open {
+  transform: rotate(90deg);
 }
 
 @media (max-width: 640px) {

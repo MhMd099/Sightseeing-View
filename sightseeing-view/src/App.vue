@@ -4,8 +4,8 @@
       <router-link class="brand" to="/">Sightseeing View</router-link>
       <nav class="app-nav" aria-label="Hauptnavigation">
         <router-link to="/">Start</router-link>
-        <router-link to="/register">Registrieren</router-link>
-        <router-link to="/login">Login</router-link>
+        <router-link v-if="!userId" to="/register">Registrieren</router-link>
+        <router-link v-if="!userId" to="/login">Login</router-link>
         <router-link v-if="userId" to="/favorites">Favoriten</router-link>
         <router-link v-if="userId" to="/profile">Profil</router-link>
         <span v-if="displayName" class="user-greeting">Hallo, {{ displayName }}</span>
