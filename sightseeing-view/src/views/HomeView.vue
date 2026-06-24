@@ -6,7 +6,12 @@
           <h2>Community Feed</h2>
           <p>Neue Favoriten erscheinen live für eingeloggte Nutzer.</p>
         </div>
-        <span class="feed-status" :class="{ live: feedLive }">{{ feedLive ? 'Live' : 'Verbinde...' }}</span>
+        <div class="feed-controls">
+          <span class="feed-status" :class="{ live: feedLive }">{{ feedLive ? 'Live' : 'Verbinde...' }}</span>
+          <button v-if="feedItems.length > 0" type="button" class="feed-clear-btn" @click="clearFeed" title="Feed leeren">
+            Clear
+          </button>
+        </div>
       </div>
 
       <p v-if="feedError" class="compare-error">{{ feedError }}</p>
@@ -284,6 +289,9 @@ export default {
         dateStyle: 'short',
         timeStyle: 'short'
       })
+    },
+    clearFeed() {
+      this.feedItems = []
     }
   }
 }
@@ -454,6 +462,12 @@ export default {
   color: var(--ink-700);
 }
 
+.feed-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .feed-status {
   border-radius: 999px;
   padding: 8px 12px;
@@ -466,6 +480,22 @@ export default {
 .feed-status.live {
   background: rgba(42, 157, 143, 0.14);
   color: #1f7a6e;
+}
+
+.feed-clear-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(224, 122, 95, 0.12);
+  color: #b24b35;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.feed-clear-btn:hover {
+  background: rgba(224, 122, 95, 0.2);
 }
 
 .feed-empty {
